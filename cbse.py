@@ -1,51 +1,65 @@
-import requests
-import hashlib
 import os
+import hashlib
+import requests
+from bs4 import BeautifulSoup
 import discord
 import asyncio
 
-URL = "https://results.cbse.nic.in/"
-HASH_FILE = "last_hash.txt"
-
+# Load environment variables
 DISCORD_TOKEN = os.environ['DISCORD_TOKEN']
-CHANNEL_ID = int(os.environ['DISCORD_CHANNEL_ID'])     # Main result alert channel
-DEBUG_CHANNEL_ID = int(os.environ['DEBUG_ID'])         # Debug/heartbeat channel
+MAIN_CHANNEL_ID = int(os.environ['DISCORD_CHANNEL_ID'])
+DEBUG_CHANNEL_ID = int(os.environ['DEBUG_ID'])
 
-def get_hash():
-    content = requests.get(URL).text
-    return hashlib.md5(content.encode()).hexdigest()
+# Website URL
+URL = "https://results.cbse.nic.in/"
 
-async def main():
-    new_hash = get_hash()
-    if os.path.exists(HASH_FILE):
-        with open(HASH_FILE, "r") as f:
-            old_hash = f.read().strip()
+# Discord client setup
+intents = discord.Intents.default()
+client = discord.Client(intents=intents)
+
+def fetch_site_hash():
+    """Scrape the CBSE site and generate a hash of the relevant 2025 XII results entries."""
+    response = requests.get(URL)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    links = soup.find_all("a", href=True)
+
+    filtered = [
+        link['aria-label']
+        for link in links
+        if 'aria-label' in link.attrs and all(keyword in link['aria-label'] for keyword in ['2025', 'XII', 'Result'])
+    ]
+
+    combined_text = ''.join(filtered)
+    return hashlib.md5(combined_text.encode()).hexdigest()
+
+def load_last_hash():
+    """Load last saved hash from file."""
+    try:
+        with open("last_hash.txt", "r") as file:
+            return file.read().strip()
+    except FileNotFoundError:
+        return ""
+
+def save_hash(new_hash):
+    """Save the current hash to file."""
+    with open("last_hash.txt", "w") as file:
+        file.write(new_hash)
+
+@client.event
+async def on_ready():
+    main_channel = client.get_channel(MAIN_CHANNEL_ID)
+    debug_channel = client.get_channel(DEBUG_CHANNEL_ID)
+
+    new_hash = fetch_site_hash()
+    old_hash = load_last_hash()
+
+    if new_hash != old_hash:
+        await main_channel.send(f"@everyone\n🔔 **CBSE website updated!** Possibly a new 2025 XII Result.\nCheck it out [CBSE]({URL})")
+        await debug_channel.send(f"@hmmmm8544\n🔔 **CBSE website updated!**\nOld Hash: `{old_hash}`\nNew Hash: `{new_hash}`")       
+        save_hash(new_hash)
     else:
-        old_hash = ""
+        await debug_channel.send("@hmmmm8544\n✅ Workflow ran successfully. No update detected.")
 
-    intents = discord.Intents.default()
-    client = discord.Client(intents=intents)
+    await client.close()
 
-    @client.event
-    async def on_ready():
-        try:
-            debug_channel = client.get_channel(DEBUG_CHANNEL_ID)
-            await debug_channel.send("@everyone\n✅ Workflow ran successfully!")
-
-            if new_hash != old_hash:
-                result_channel = client.get_channel(CHANNEL_ID)
-                await result_channel.send("@everyone\n🔔 CBSE Results page has changed! https://results.cbse.nic.in/\nNote: Backend changes in website may also be flagged and notified")
-
-                with open(HASH_FILE, "w") as f:
-                    f.write(new_hash)
-
-        except Exception as e:
-            debug_channel = client.get_channel(DEBUG_CHANNEL_ID)
-            await debug_channel.send(f"❌ Error: {e}")
-
-        await client.close()
-
-    await client.start(DISCORD_TOKEN)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+asyncio.run(client.start(DISCORD_TOKEN))

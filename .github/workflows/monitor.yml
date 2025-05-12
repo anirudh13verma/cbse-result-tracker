@@ -1,28 +1,43 @@
-name: Monitor CBSE Results Site
+name: check_site
 
 on:
   schedule:
-    - cron: '*/10 * * * *'  # every 10 minutes
-  workflow_dispatch:       # allows manual trigger
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
 
 jobs:
-  check_site:
+  run-bot:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
 
-    - name: Install dependencies
-      run: pip install requests discord.py
+      - name: Install dependencies
+        run: |
+          pip install -U pip
+          pip install requests discord.py beautifulsoup4
 
-    - name: Run monitor
-      env:
-        DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
-        DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
-        DEBUG_ID: ${{ secrets.DEBUG_ID }}
-      run: python cbse.py
+      - name: Download last hash
+        uses: actions/download-artifact@v4
+        with:
+          name: last-hash
+        continue-on-error: true  # Don't fail if not found on first run
+
+      - name: Run monitor
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
+          DEBUG_ID: ${{ secrets.DEBUG_ID }}
+        run: python cbse.py
+
+      - name: Upload new hash
+        uses: actions/upload-artifact@v4
+        with:
+          name: last-hash
+          path: last_hash.txt
