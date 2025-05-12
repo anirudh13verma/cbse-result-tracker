@@ -30,7 +30,7 @@ async def main():
     async def on_ready():
         try:
             debug_channel = client.get_channel(DEBUG_CHANNEL_ID)
-            await debug_channel.send("@evryone\n✅ Workflow ran successfully!")
+            await debug_channel.send("@everyone\n✅ Workflow ran successfully!")
 
             if new_hash != old_hash:
                 result_channel = client.get_channel(CHANNEL_ID)
