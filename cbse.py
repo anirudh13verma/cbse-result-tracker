@@ -8,7 +8,8 @@ URL = "https://results.cbse.nic.in/"
 HASH_FILE = "last_hash.txt"
 
 DISCORD_TOKEN = os.environ['DISCORD_TOKEN']
-CHANNEL_ID = int(os.environ['DISCORD_CHANNEL_ID'])
+CHANNEL_ID = int(os.environ['DISCORD_CHANNEL_ID'])     # Main result alert channel
+DEBUG_CHANNEL_ID = int(os.environ['DEBUG_ID'])         # Debug/heartbeat channel
 
 def get_hash():
     content = requests.get(URL).text
@@ -22,20 +23,29 @@ async def main():
     else:
         old_hash = ""
 
-    if new_hash != old_hash:
-        intents = discord.Intents.default()  # ← ADD THIS
-        client = discord.Client(intents=intents)  # ← AND THIS
+    intents = discord.Intents.default()
+    client = discord.Client(intents=intents)
 
-        @client.event
-        async def on_ready():
-            channel = client.get_channel(CHANNEL_ID)
-            await channel.send("🔔 CBSE Results page has changed! https://results.cbse.nic.in/")
-            await client.close()
+    @client.event
+    async def on_ready():
+        try:
+            debug_channel = client.get_channel(DEBUG_CHANNEL_ID)
+            await debug_channel.send("✅ Workflow ran successfully!")
 
-        with open(HASH_FILE, "w") as f:
-            f.write(new_hash)
+            if new_hash != old_hash:
+                result_channel = client.get_channel(CHANNEL_ID)
+                await result_channel.send("🔔 CBSE Results page has changed! https://results.cbse.nic.in/")
 
-        await client.start(DISCORD_TOKEN)
+                with open(HASH_FILE, "w") as f:
+                    f.write(new_hash)
+
+        except Exception as e:
+            debug_channel = client.get_channel(DEBUG_CHANNEL_ID)
+            await debug_channel.send(f"❌ Error: {e}")
+
+        await client.close()
+
+    await client.start(DISCORD_TOKEN)
 
 if __name__ == "__main__":
     asyncio.run(main())
