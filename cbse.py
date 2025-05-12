@@ -30,11 +30,11 @@ async def main():
     async def on_ready():
         try:
             debug_channel = client.get_channel(DEBUG_CHANNEL_ID)
-            await debug_channel.send("✅ Workflow ran successfully!")
+            await debug_channel.send("@evryone\n✅ Workflow ran successfully!")
 
             if new_hash != old_hash:
                 result_channel = client.get_channel(CHANNEL_ID)
-                await result_channel.send("🔔 CBSE Results page has changed! https://results.cbse.nic.in/")
+                await result_channel.send("@everyone\n🔔 CBSE Results page has changed! https://results.cbse.nic.in/\nNote: Backend changes in website may also be flagged and notified")
 
                 with open(HASH_FILE, "w") as f:
                     f.write(new_hash)
