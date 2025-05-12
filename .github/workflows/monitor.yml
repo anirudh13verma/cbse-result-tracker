@@ -24,4 +24,5 @@ jobs:
       env:
         DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
         DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
+        DEBUG_ID: ${{ secrets.DEBUG_ID }}
       run: python cbse.py
