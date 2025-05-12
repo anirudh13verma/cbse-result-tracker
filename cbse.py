@@ -23,7 +23,8 @@ async def main():
         old_hash = ""
 
     if new_hash != old_hash:
-        client = discord.Client()
+        intents = discord.Intents.default()  # ← ADD THIS
+        client = discord.Client(intents=intents)  # ← AND THIS
 
         @client.event
         async def on_ready():
