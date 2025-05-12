@@ -1,0 +1,7 @@
+# Ignore secret environment files
+.env
+
+# Ignore temporary hash or cache files
+last_hash.txt
+__pycache__/
+*.log
