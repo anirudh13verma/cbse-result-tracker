@@ -44,7 +44,7 @@ jobs:
             echo "Changes detected, committing last_hash.txt..."
             git add last_hash.txt
             git commit -m "Update last_hash.txt after checking CBSE site"
-            git push origin HEAD:main
+            git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} HEAD:main
           else
             echo "No changes in last_hash.txt"
           fi
