@@ -1,47 +1,49 @@
-name: check_site
+name: CBSE Result Tracker
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
-  workflow_dispatch:
+    - cron: '*/10 * * * *'  # This will run the workflow every 10 minutes (you can adjust the timing)
+  push:
+    branches:
+      - main  # Run when there's a push to the main branch
+  workflow_dispatch:  # Allows manual triggering of the workflow
 
 jobs:
-  run-bot:
-    runs-on: ubuntu-latest
+  track-cbse-result:
+    runs-on: ubuntu-latest  # You can adjust the OS based on your needs
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          persist-credentials: true  # Required for commit & push
+    - name: Checkout Repository
+      uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.x'
 
-      - name: Install dependencies
-        run: |
-          pip install -U pip
-          pip install requests discord.py beautifulsoup4
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
 
-      - name: Configure Git
-        run: |
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
+    - name: Run CBSE Result Tracker Script
+      run: |
+        python cbse.py  # Run the script that checks the CBSE website and compares hashes
 
-      - name: Pull latest last_hash.txt (optional safety)
-        run: git pull origin main || true
+    - name: Commit changes to last_hash.txt
+      run: |
+        git config --global user.email "anirudh13verma@gmail.com"  # Set your email
+        git config --global user.name "ANIRUDH VERMA"  # Set your name
 
-      - name: Run monitor
-        env:
-          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
-          DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
-          DEBUG_ID: ${{ secrets.DEBUG_ID }}
-        run: python cbse.py
+        # Check if there are changes in the last_hash.txt file
+        git diff --exit-code last_hash.txt || echo "Changes detected"
 
-      - name: Commit updated hash
-        run: |
-          git add last_hash.txt
-          git commit -m "Update last_hash.txt [skip ci]" || echo "No changes to commit"
-          git push origin main || echo "Push failed (e.g. protected branch)"
+        # Commit and push changes if the file has been modified
+        git add last_hash.txt
+        git commit -m "Update last_hash.txt after checking CBSE results"
+        git push
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Use the GitHub token for authentication
+        DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+        DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
+        DEBUG_ID: ${{ secrets.DEBUG_ID }}
+

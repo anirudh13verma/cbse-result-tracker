@@ -1,100 +1,110 @@
 import os
+import hashlib
 import requests
-from bs4 import BeautifulSoup
+import time
 import discord
-import asyncio
+from discord.ext import tasks
+from bs4 import BeautifulSoup
 
-DISCORD_TOKEN = os.environ['DISCORD_TOKEN']
-MAIN_CHANNEL_ID = int(os.environ['DISCORD_CHANNEL_ID'])
-DEBUG_CHANNEL_ID = int(os.environ['DEBUG_ID'])
-
+# URL to scrape
 URL = "https://results.cbse.nic.in/"
 
+# Discord token and channel IDs
+DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
+MAIN_CHANNEL_ID = int(os.getenv('DISCORD_CHANNEL_ID'))
+DEBUG_CHANNEL_ID = int(os.getenv('DEBUG_ID'))
+
+# Headers for scraping
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
+    "Referer": URL,
+    "DNT": "1",
+}
+
+# Discord client setup
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
 
-async def fetch_matching_lines(max_retries=3, delay=5):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
-        "Referer": URL,
-        "DNT": "1"
-    }
-
-    for attempt in range(1, max_retries + 1):
+# Function to fetch site content and generate MD5 hash
+def fetch_site_hash():
+    """Fetch website content and generate MD5 hash of matching lines."""
+    for attempt in range(3):  # Retry mechanism
         try:
-            print(f"🟡 Attempt {attempt}...")
-            response = requests.get(URL, headers=headers)
+            response = requests.get(URL, headers=HEADERS)
             if "An error occurred while processing your request." in response.text:
                 print("⚠️ Akamai edge block detected. Retrying...")
-                if attempt == max_retries:
-                    return ["⚠️ Akamai edge block detected."]
-                await asyncio.sleep(delay)
+                time.sleep(5)
                 continue
 
             soup = BeautifulSoup(response.text, 'html.parser')
-            lines = soup.prettify().splitlines()
+            full_text = soup.prettify().lower()
+            lines = full_text.splitlines()
 
+            # Filter lines containing 2025, xii, and result
             matching_lines = [
-                line.strip()
-                for line in lines
-                if '2025' in line and 'xii' in line.lower() and ('result' in line.lower() or 'results' in line.lower())
+                line for line in lines
+                if '2025' in line and 'xii' in line and ('result' in line or 'results' in line)
             ]
 
-            print(f"✅ Found {len(matching_lines)} matching line(s).")
-            for line in matching_lines:
-                print("📌", line)
-
-            return matching_lines if matching_lines else ["NOPE"]
+            # Return the MD5 hash of the matching lines (empty list -> empty hash)
+            combined_text = ''.join(matching_lines)
+            return hashlib.md5(combined_text.encode()).hexdigest()
 
         except Exception as e:
-            print(f"❌ Error on attempt {attempt}: {e}")
-            await asyncio.sleep(delay)
+            print(f"❌ Error on attempt {attempt + 1}: {e}")
+            time.sleep(5)
 
-    return ["❌ Failed to fetch site data after all retries."]
+    raise Exception("🚫 Failed to fetch valid site data after all retries.")
 
-def load_last_snapshot():
+# Function to load the last saved hash
+def load_last_hash():
+    """Load the last saved hash from the file."""
     try:
-        with open("last_hash.txt", "r", encoding="utf-8") as file:
+        with open('last_hash.txt', 'r') as file:
             return file.read().strip()
     except FileNotFoundError:
-        return "NEW"
+        return ""  # No previous hash found
 
-def save_snapshot(snapshot_text):
-    with open("last_hash.txt", "w", encoding="utf-8") as file:
-        file.write(snapshot_text)
+# Function to save the current hash to the file
+def save_hash(new_hash):
+    """Save the new hash to the last_hash.txt file."""
+    with open('last_hash.txt', 'w') as file:
+        file.write(new_hash)
 
+# Function to handle the bot actions after checking the website
 @client.event
 async def on_ready():
+    print(f'Logged in as {client.user}')
     main_channel = client.get_channel(MAIN_CHANNEL_ID)
     debug_channel = client.get_channel(DEBUG_CHANNEL_ID)
 
-    matching_lines = await fetch_matching_lines()
-    current_snapshot = "\n".join(matching_lines)
-    old_snapshot = load_last_snapshot()
+    # Fetch the new hash of the website
+    new_hash = fetch_site_hash()
+    old_hash = load_last_hash()
 
-    # Check if it's the first run (or last_hash.txt contains "NEW")
-    if old_snapshot == "NEW":
-        save_snapshot(current_snapshot)
-        await debug_channel.send("@hmmmm8544\n🆕 First run. Snapshot saved but no alert sent.")
-        await debug_channel.send("```\n" + current_snapshot + "\n```")
-        await client.close()
-        return
+    # Print the hashes in the CLI for debugging
+    print(f"Old Hash: {old_hash}")
+    print(f"New Hash: {new_hash}")
 
-    if current_snapshot != old_snapshot:
-        if current_snapshot != "NOPE":
-            await main_channel.send(f"@everyone\n🔔 **CBSE website updated!** Possibly a new 2025 XII Result.\nCheck it out [CBSE]({URL})")
-        await debug_channel.send("@hmmmm8544\n🔄 Snapshot changed.")
-        await debug_channel.send("📂 Old:")
-        await debug_channel.send("```\n" + old_snapshot + "\n```")
-        await debug_channel.send("🆕 New:")
-        await debug_channel.send("```\n" + current_snapshot + "\n```")
-        save_snapshot(current_snapshot)
-    else:
-        await debug_channel.send("@hmmmm8544\n✅ No change detected.")
-        await debug_channel.send("```\n" + current_snapshot + "\n```")
+    # Check if the hash has changed
+    if new_hash == old_hash:
+        print("No change detected.")
+        await debug_channel.send(f"No change detected.\nOld Hash: `{old_hash}`\nNew Hash: `{new_hash}`")
+    elif new_hash != old_hash and new_hash != hashlib.md5("".encode()).hexdigest():
+        print("Change detected: 2025 update.")
+        await main_channel.send(f"@everyone\n🔔 **CBSE website updated!** Possibly a new 2025 XII Result.\nCheck it out [CBSE]({URL})")
+        await debug_channel.send(f"Change detected: 2025 update.\nOld Hash: `{old_hash}`\nNew Hash: `{new_hash}`")
+    elif new_hash != old_hash and new_hash == hashlib.md5("".encode()).hexdigest():
+        print("New file or no relevant content.")
+        await debug_channel.send(f"New file or no relevant content.\nOld Hash: `{old_hash}`\nNew Hash: `{new_hash}`")
 
+    # Save the new hash to the file for future comparison
+    save_hash(new_hash)
+
+    # Close the bot
     await client.close()
 
-asyncio.run(client.start(DISCORD_TOKEN))
+# Run the bot
+client.run(DISCORD_TOKEN)
