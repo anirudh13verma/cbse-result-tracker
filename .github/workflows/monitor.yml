@@ -23,21 +23,6 @@ jobs:
           pip install -U pip
           pip install requests discord.py beautifulsoup4
 
-      - name: Download last hash
-        id: download-hash
-        uses: actions/download-artifact@v4
-        with:
-          name: last-hash
-        continue-on-error: true # Keep this, but handle the missing file more explicitly
-
-      - name: Restore hash file
-        run: |
-          if [ -d "last-hash" ] && [ -f "last-hash/last_hash.txt" ]; then # Check if directory exists
-            cp last-hash/last_hash.txt .
-          else
-            echo "No previous hash found. Starting fresh." # Add this line
-          fi
-
       - name: Run monitor
         env:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
@@ -45,8 +30,13 @@ jobs:
           DEBUG_ID: ${{ secrets.DEBUG_ID }}
         run: python cbse.py
 
-      - name: Upload new hash
-        uses: actions/upload-artifact@v4
-        with:
-          name: last-hash
-          path: last_hash.txt
+      - name: Check if last_hash.txt changed
+        run: |
+          if [[ $(git status --porcelain) ]]; then
+            echo "Changes detected, committing last_hash.txt..."
+            git add last_hash.txt
+            git commit -m "Update last_hash.txt after checking CBSE site"
+            git push origin HEAD:main
+          else
+            echo "No changes in last_hash.txt"
+          fi
