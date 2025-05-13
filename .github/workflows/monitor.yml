@@ -2,8 +2,8 @@ name: check_site
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
-  workflow_dispatch:
+    - cron: "*/10 * * * *"  # Runs every 10 minutes
+  workflow_dispatch:  # Allows manual triggering
 
 jobs:
   run-bot:
@@ -29,6 +29,9 @@ jobs:
           DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
           DEBUG_ID: ${{ secrets.DEBUG_ID }}
         run: python cbse.py
+
+      - name: Display contents of last_hash.txt
+        run: cat last_hash.txt  # For debugging the contents of last_hash.txt
 
       - name: Set up Git config
         run: |
