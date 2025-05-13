@@ -3,7 +3,6 @@ import hashlib
 import requests
 from bs4 import BeautifulSoup
 import discord
-import asyncio
 
 # Load environment variables
 DISCORD_TOKEN = os.environ['DISCORD_TOKEN']
@@ -64,14 +63,15 @@ async def fetch_site_hash(max_retries=3, delay=5):
 def load_last_hash():
     """Load last saved hash from file."""
     try:
-        with open("last_hash.txt", "r") as file:
+        with open("last_hash.txt", "r", encoding="utf-8") as file:
             return file.read().strip()
-    except FileNotFoundError:
+    except (FileNotFoundError, UnicodeDecodeError):
+        print("⚠️ Warning: last_hash.txt missing or corrupted. Starting fresh.")
         return ""
 
 def save_hash(new_hash):
     """Save the current hash to file."""
-    with open("last_hash.txt", "w") as file:
+    with open("last_hash.txt", "w", encoding="utf-8") as file:
         file.write(new_hash)
 
 @client.event
@@ -86,13 +86,15 @@ async def on_ready():
         await debug_channel.send("@hmmmm8544\n❌ Error fetching site. Possibly Akamai blocked or other issue.")
         await debug_channel.send("```\n" + "\n".join(matching_lines) + "\n```")
         await client.close()
+        print("🔴 Bot exiting due to error.")
         return
 
-    if not old_hash:  # Check for empty old_hash
+    if not old_hash:
         save_hash(new_hash)
-        await debug_channel.send("@hmmmm8544\n🆕 First run detected. Hash saved but no alert sent.")
+        await debug_channel.send("@hmmmm8544\n🆕 First run or corrupted hash. Hash saved but no alert sent.")
         await debug_channel.send("```\n" + "\n".join(matching_lines) + "\n```")
         await client.close()
+        print("🟢 First-time save. Bot exited.")
         return
 
     if new_hash != old_hash:
@@ -107,6 +109,6 @@ async def on_ready():
 
     await client.close()
     print("✅ Bot shut down cleanly.")
-    
 
+# Use client.run instead of asyncio.run to avoid GitHub Actions hanging
 client.run(DISCORD_TOKEN)
