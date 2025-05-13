@@ -1,23 +1,19 @@
 import os
-import hashlib
 import requests
 from bs4 import BeautifulSoup
 import discord
+import asyncio
 
-# Load environment variables
 DISCORD_TOKEN = os.environ['DISCORD_TOKEN']
 MAIN_CHANNEL_ID = int(os.environ['DISCORD_CHANNEL_ID'])
 DEBUG_CHANNEL_ID = int(os.environ['DEBUG_ID'])
 
-# Website URL
 URL = "https://results.cbse.nic.in/"
 
-# Discord client setup
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
 
-async def fetch_site_hash(max_retries=3, delay=5):
-    """Scrape the CBSE site and generate a hash of lines mentioning 2025 XII Result(s)."""
+async def fetch_matching_lines(max_retries=3, delay=5):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -33,13 +29,12 @@ async def fetch_site_hash(max_retries=3, delay=5):
             if "An error occurred while processing your request." in response.text:
                 print("⚠️ Akamai edge block detected. Retrying...")
                 if attempt == max_retries:
-                    return None, ["⚠️ Akamai edge block detected."]
+                    return ["⚠️ Akamai edge block detected."]
                 await asyncio.sleep(delay)
                 continue
 
             soup = BeautifulSoup(response.text, 'html.parser')
-            full_text = soup.prettify()
-            lines = full_text.splitlines()
+            lines = soup.prettify().splitlines()
 
             matching_lines = [
                 line.strip()
@@ -51,64 +46,55 @@ async def fetch_site_hash(max_retries=3, delay=5):
             for line in matching_lines:
                 print("📌", line)
 
-            combined_text = ''.join(matching_lines)
-            return hashlib.md5(combined_text.encode()).hexdigest(), matching_lines
+            return matching_lines if matching_lines else ["NOPE"]
 
         except Exception as e:
             print(f"❌ Error on attempt {attempt}: {e}")
             await asyncio.sleep(delay)
 
-    return None, ["❌ Failed to fetch site data after all retries."]
+    return ["❌ Failed to fetch site data after all retries."]
 
-def load_last_hash():
-    """Load last saved hash from file."""
+def load_last_snapshot():
     try:
         with open("last_hash.txt", "r", encoding="utf-8") as file:
             return file.read().strip()
-    except (FileNotFoundError, UnicodeDecodeError):
-        print("⚠️ Warning: last_hash.txt missing or corrupted. Starting fresh.")
-        return ""
+    except FileNotFoundError:
+        return "NEW"
 
-def save_hash(new_hash):
-    """Save the current hash to file."""
+def save_snapshot(snapshot_text):
     with open("last_hash.txt", "w", encoding="utf-8") as file:
-        file.write(new_hash)
+        file.write(snapshot_text)
 
 @client.event
 async def on_ready():
     main_channel = client.get_channel(MAIN_CHANNEL_ID)
     debug_channel = client.get_channel(DEBUG_CHANNEL_ID)
 
-    new_hash, matching_lines = await fetch_site_hash()
-    old_hash = load_last_hash()
+    matching_lines = await fetch_matching_lines()
+    current_snapshot = "\n".join(matching_lines)
+    old_snapshot = load_last_snapshot()
 
-    if new_hash is None:
-        await debug_channel.send("@hmmmm8544\n❌ Error fetching site. Possibly Akamai blocked or other issue.")
-        await debug_channel.send("```\n" + "\n".join(matching_lines) + "\n```")
+    # Check if it's the first run (or last_hash.txt contains "NEW")
+    if old_snapshot == "NEW":
+        save_snapshot(current_snapshot)
+        await debug_channel.send("@hmmmm8544\n🆕 First run. Snapshot saved but no alert sent.")
+        await debug_channel.send("```\n" + current_snapshot + "\n```")
         await client.close()
-        print("🔴 Bot exiting due to error.")
         return
 
-    if not old_hash:
-        save_hash(new_hash)
-        await debug_channel.send("@hmmmm8544\n🆕 First run or corrupted hash. Hash saved but no alert sent.")
-        await debug_channel.send("```\n" + "\n".join(matching_lines) + "\n```")
-        await client.close()
-        print("🟢 First-time save. Bot exited.")
-        return
-
-    if new_hash != old_hash:
-        await main_channel.send(f"@everyone\n🔔 **CBSE website updated!** Possibly a new 2025 XII Result.\nCheck it out [CBSE]({URL})")
-        await debug_channel.send(f"@hmmmm8544\n🔔 **CBSE website updated!**\nOld Hash: `{old_hash}`\nNew Hash: `{new_hash}`")
-        await debug_channel.send("```\n" + "\n".join(matching_lines) + "\n```")
-        save_hash(new_hash)
+    if current_snapshot != old_snapshot:
+        if current_snapshot != "NOPE":
+            await main_channel.send(f"@everyone\n🔔 **CBSE website updated!** Possibly a new 2025 XII Result.\nCheck it out [CBSE]({URL})")
+        await debug_channel.send("@hmmmm8544\n🔄 Snapshot changed.")
+        await debug_channel.send("📂 Old:")
+        await debug_channel.send("```\n" + old_snapshot + "\n```")
+        await debug_channel.send("🆕 New:")
+        await debug_channel.send("```\n" + current_snapshot + "\n```")
+        save_snapshot(current_snapshot)
     else:
-        await debug_channel.send("@hmmmm8544\n✅ Workflow ran successfully. No update detected.")
-        await debug_channel.send(f"Old Hash: `{old_hash}`\nNew Hash: `{new_hash}`")
-        await debug_channel.send("```\n" + "\n".join(matching_lines) + "\n```")
+        await debug_channel.send("@hmmmm8544\n✅ No change detected.")
+        await debug_channel.send("```\n" + current_snapshot + "\n```")
 
     await client.close()
-    print("✅ Bot shut down cleanly.")
 
-# Use client.run instead of asyncio.run to avoid GitHub Actions hanging
-client.run(DISCORD_TOKEN)
+asyncio.run(client.start(DISCORD_TOKEN))
