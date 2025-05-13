@@ -2,7 +2,7 @@
 .env
 
 # Ignore temporary hash or cache files
-last_hash.txt
+#last_hash.txt
 __pycache__/
 *.log
 test.py
