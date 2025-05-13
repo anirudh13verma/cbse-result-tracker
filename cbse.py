@@ -106,5 +106,7 @@ async def on_ready():
         await debug_channel.send("```\n" + "\n".join(matching_lines) + "\n```")
 
     await client.close()
+    print("✅ Bot shut down cleanly.")
+    
 
-asyncio.run(client.start(DISCORD_TOKEN))
+client.run(DISCORD_TOKEN)
