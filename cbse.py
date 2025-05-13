@@ -39,7 +39,8 @@ async def fetch_site_hash(max_retries=3, delay=5):
                 continue
 
             soup = BeautifulSoup(response.text, 'html.parser')
-            lines = soup.prettify().splitlines()
+            full_text = soup.prettify()
+            lines = full_text.splitlines()
 
             matching_lines = [
                 line.strip()
@@ -87,16 +88,22 @@ async def on_ready():
         await client.close()
         return
 
+    if not old_hash:
+        save_hash(new_hash)
+        await debug_channel.send("@hmmmm8544\n🆕 First run detected. Hash saved but no alert sent.")
+        await debug_channel.send("```\n" + "\n".join(matching_lines) + "\n```")
+        await client.close()
+        return
+
     if new_hash != old_hash:
         await main_channel.send(f"@everyone\n🔔 **CBSE website updated!** Possibly a new 2025 XII Result.\nCheck it out [CBSE]({URL})")
         await debug_channel.send(f"@hmmmm8544\n🔔 **CBSE website updated!**\nOld Hash: `{old_hash}`\nNew Hash: `{new_hash}`")
+        await debug_channel.send("```\n" + "\n".join(matching_lines) + "\n```")
         save_hash(new_hash)
     else:
         await debug_channel.send("@hmmmm8544\n✅ Workflow ran successfully. No update detected.")
-
-    if matching_lines:
-        codeblock = "\n".join(matching_lines)
-        await debug_channel.send(f"```\n{codeblock}\n```")
+        await debug_channel.send(f"Old Hash: `{old_hash}`\nNew Hash: `{new_hash}`")
+        await debug_channel.send("```\n" + "\n".join(matching_lines) + "\n```")
 
     await client.close()
 

@@ -27,7 +27,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: last-hash
-        continue-on-error: true  # Don't fail if not found on first run
+        continue-on-error: true
+
+      - name: Restore hash file
+        run: |
+          if [ -f last-hash/last_hash.txt ]; then
+            cp last-hash/last_hash.txt .
+          fi
 
       - name: Run monitor
         env:
