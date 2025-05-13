@@ -1,49 +1,52 @@
-name: CBSE Result Tracker
+name: check_site
 
 on:
   schedule:
-    - cron: '*/10 * * * *'  # This will run the workflow every 10 minutes (you can adjust the timing)
-  push:
-    branches:
-      - main  # Run when there's a push to the main branch
-  workflow_dispatch:  # Allows manual triggering of the workflow
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
 
 jobs:
-  track-cbse-result:
-    runs-on: ubuntu-latest  # You can adjust the OS based on your needs
+  run-bot:
+    runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v3
-      with:
-        python-version: '3.x'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
 
-    - name: Install dependencies
-      run: |
-        pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          pip install -U pip
+          pip install requests discord.py beautifulsoup4
 
-    - name: Run CBSE Result Tracker Script
-      run: |
-        python cbse.py  # Run the script that checks the CBSE website and compares hashes
+      - name: Download last hash
+        id: download-hash
+        uses: actions/download-artifact@v4
+        with:
+          name: last-hash
+        continue-on-error: true # Keep this, but handle the missing file more explicitly
 
-    - name: Commit changes to last_hash.txt
-      run: |
-        git config --global user.email "anirudh13verma@gmail.com"  # Set your email
-        git config --global user.name "ANIRUDH VERMA"  # Set your name
+      - name: Restore hash file
+        run: |
+          if [ -d "last-hash" ] && [ -f "last-hash/last_hash.txt" ]; then # Check if directory exists
+            cp last-hash/last_hash.txt .
+          else
+            echo "No previous hash found. Starting fresh." # Add this line
+          fi
 
-        # Check if there are changes in the last_hash.txt file
-        git diff --exit-code last_hash.txt || echo "Changes detected"
+      - name: Run monitor
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
+          DEBUG_ID: ${{ secrets.DEBUG_ID }}
+        run: python cbse.py
 
-        # Commit and push changes if the file has been modified
-        git add last_hash.txt
-        git commit -m "Update last_hash.txt after checking CBSE results"
-        git push
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Use the GitHub token for authentication
-        DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
-        DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
-        DEBUG_ID: ${{ secrets.DEBUG_ID }}
-
+      - name: Upload new hash
+        uses: actions/upload-artifact@v4
+        with:
+          name: last-hash
+          path: last_hash.txt
