@@ -88,7 +88,7 @@ async def on_ready():
         await client.close()
         return
 
-    if not old_hash:
+    if not old_hash:  # Check for empty old_hash
         save_hash(new_hash)
         await debug_channel.send("@hmmmm8544\n🆕 First run detected. Hash saved but no alert sent.")
         await debug_channel.send("```\n" + "\n".join(matching_lines) + "\n```")
